@@ -24,3 +24,12 @@ docker exec -it pokemon-practice mysql -u pokemon -p POKEMON
 ```
 
 비밀번호: `pk1234`
+
+## 4. 복사된 query.sql 실행
+
+MySQL 접속 후 `mysql>`에서 입력한다.
+
+```sql
+SET NAMES utf8mb4;
+SOURCE /sql/query.sql;
+```

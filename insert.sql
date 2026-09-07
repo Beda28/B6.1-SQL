@@ -1,4 +1,5 @@
 USE POKEMON;
+SET NAMES utf8mb4;
 
 INSERT INTO type (name) VALUES 
 ('노말'),

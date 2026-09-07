@@ -1,9 +1,10 @@
 USE POKEMON;
+SET NAMES utf8mb4;
 
--- 1. 공격력 80 이상
+-- 1. 공격력 90 이상
 SELECT name, atk 
 FROM pokemon 
-WHERE atk >= 80 
+WHERE atk >= 90 
 ORDER BY atk DESC;
 
 -- 2. 스피드 TOP 5
@@ -24,7 +25,7 @@ WHERE power >= 90
 ORDER BY power DESC;
 
 -- 5. 포켓몬 타입 조회
-SELECT p.name AS pokemon, GROUP_CONCAT(t.name ORDER BY pt.type_order SEPARATOR ' | ') AS type
+SELECT p.name AS pokemon, GROUP_CONCAT(t.name ORDER BY pt.type_order SEPARATOR ', ') AS type
 FROM pokemon p 
 INNER JOIN pokemon_type pt ON p.id = pt.pokemon_id 
 INNER JOIN type t          ON pt.type_id = t.id 

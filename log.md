@@ -1,8 +1,8 @@
 # query.sql 실행 결과
 
-2026-09-07 (한국 시간), Dockerfile로 빌드한 MySQL 8.4.11 컨테이너에서 `query.sql`을 처음부터 끝까지 1회 실행했다. 종료 코드는 **0**이며, 15개 쿼리가 모두 성공했다.
+2026-09-07 (한국 시간), MySQL 8.4.11에서 실행한 결과다. 최초 전체 실행은 15개 쿼리 모두 성공했다. 이후 변경된 1번(공격력 90 이상)과 5번(타입 GROUP_CONCAT)은 다시 실행해 아래 결과를 갱신했다. 나머지 결과는 최초 실행 기록이며, SQL 코드 블록은 현재 파일의 정렬 형식에 맞췄다.
 
-## 실행 환경과 명령
+## 최초 실행 환경과 명령
 
 - 이미지: `pokemon-sql-log:local` (`mysql:8.4` 기반)
 - 컨테이너: `pokemon-sql-results-20260907`
@@ -23,18 +23,25 @@ docker exec -e MYSQL_PWD=pk1234 pokemon-sql-results-20260907 sh -c 'mysql --defa
 
 첫 실행에서는 클라이언트 문자셋 때문에 한글 초기 데이터 입력 시 `ERROR 1406 (22001): Data too long for column 'name' at row 1`이 발생했다. Windows 임시 설정 파일을 마운트한 시도도 파일 권한이 world-writable로 인식되어 MySQL이 설정을 무시했다. 최종 실행은 컨테이너 내부에 `utf8mb4` 클라이언트 설정을 만들고 권한을 `644`로 지정해 해결했다. Dockerfile과 SQL 원본은 수정하지 않았다.
 
-아래 표는 실제 출력 순서와 값을 유지했다. 정렬 기준이 같은 행끼리의 순서는 재실행 시 달라질 수 있다. 1~12번 조회는 13~14번 데이터 변경 전 결과다.
+아래 표는 실제 출력 순서와 값을 유지했다. 정렬 기준이 같은 행끼리의 순서는 재실행 시 달라질 수 있다. 1~12번 중 1번과 5번은 변경 후 재조회 결과이고, 나머지는 13~14번 데이터 변경 전 결과다. 1번과 5번이 조회하는 공격력·타입 데이터는 13~14번의 영향을 받지 않는다.
 
-## 1. 공격력 80 이상
+현재 `query.sql`의 시작 부분은 다음과 같다. 이번 재조회에서도 같은 설정을 적용했다.
+
+```sql
+USE POKEMON;
+SET NAMES utf8mb4;
+```
+
+## 1. 공격력 90 이상
 
 ```sql
 SELECT name, atk 
 FROM pokemon 
-WHERE atk >= 80 
+WHERE atk >= 90 
 ORDER BY atk DESC;
 ```
 
-결과: **9 행**
+결과: **4 행**
 
 | name | atk |
 | --- | --- |
@@ -42,11 +49,6 @@ ORDER BY atk DESC;
 | 괴력몬 | 130 |
 | 파르셀 | 95 |
 | 라이츄 | 90 |
-| 리자몽 | 84 |
-| 거북왕 | 83 |
-| 이상해꽃 | 82 |
-| 폴리곤2 | 80 |
-| 꼬마돌 | 80 |
 
 ## 2. 스피드 TOP 5
 
@@ -118,33 +120,28 @@ ORDER BY power DESC;
 ## 5. 포켓몬 타입 조회
 
 ```sql
-SELECT p.name AS pokemon, t.name AS type, pt.type_order 
+SELECT p.name AS pokemon, GROUP_CONCAT(t.name ORDER BY pt.type_order SEPARATOR ', ') AS type
 FROM pokemon p 
 INNER JOIN pokemon_type pt ON p.id = pt.pokemon_id 
-INNER JOIN type t ON pt.type_id = t.id 
-ORDER BY p.id, pt.type_order;
+INNER JOIN type t          ON pt.type_id = t.id 
+GROUP BY p.id, p.name
+ORDER BY p.id;
 ```
 
-결과: **16 행**
+결과: **10 행**
 
-| pokemon | type | type_order |
-| --- | --- | --- |
-| 이상해꽃 | 풀 | 1 |
-| 이상해꽃 | 독 | 2 |
-| 거북왕 | 물 | 1 |
-| 리자몽 | 불꽃 | 1 |
-| 리자몽 | 비행 | 2 |
-| 폴리곤2 | 노말 | 1 |
-| 파르셀 | 물 | 1 |
-| 파르셀 | 얼음 | 2 |
-| 라이츄 | 전기 | 1 |
-| 망나뇽 | 드래곤 | 1 |
-| 망나뇽 | 비행 | 2 |
-| 팬텀 | 고스트 | 1 |
-| 팬텀 | 독 | 2 |
-| 괴력몬 | 격투 | 1 |
-| 꼬마돌 | 바위 | 1 |
-| 꼬마돌 | 땅 | 2 |
+| pokemon | type |
+| --- | --- |
+| 이상해꽃 | 풀, 독 |
+| 거북왕 | 물 |
+| 리자몽 | 불꽃, 비행 |
+| 폴리곤2 | 노말 |
+| 파르셀 | 물, 얼음 |
+| 라이츄 | 전기 |
+| 망나뇽 | 드래곤, 비행 |
+| 팬텀 | 고스트, 독 |
+| 괴력몬 | 격투 |
+| 꼬마돌 | 바위, 땅 |
 
 ## 6. 포켓몬별 기술 조회
 
@@ -152,7 +149,7 @@ ORDER BY p.id, pt.type_order;
 SELECT p.name AS pokemon, s.name AS skill 
 FROM pokemon p 
 INNER JOIN pokemon_skill ps ON p.id = ps.pokemon_id 
-INNER JOIN skill s ON ps.skill_id = s.id 
+INNER JOIN skill s          ON ps.skill_id = s.id 
 ORDER BY p.name, s.name;
 ```
 
@@ -215,7 +212,7 @@ ORDER BY p.name, s.name;
 SELECT p.name
 FROM pokemon p
 INNER JOIN pokemon_type pt ON p.id = pt.pokemon_id
-INNER JOIN type t ON pt.type_id = t.id
+INNER JOIN type t          ON pt.type_id = t.id
 WHERE t.name = '전기';
 ```
 
@@ -231,7 +228,7 @@ WHERE t.name = '전기';
 SELECT p.name AS pokemon, s.name AS skill
 FROM pokemon p
 LEFT JOIN pokemon_skill ps ON p.id = ps.pokemon_id
-LEFT JOIN skill s ON ps.skill_id = s.id
+LEFT JOIN skill s          ON ps.skill_id = s.id
 ORDER BY p.name, s.name;
 ```
 
@@ -322,7 +319,7 @@ ORDER BY pokemon_count DESC;
 SELECT t.name AS type, AVG(p.atk) AS avg_atk
 FROM type t
 INNER JOIN pokemon_type pt ON t.id = pt.type_id
-INNER JOIN pokemon p ON pt.pokemon_id = p.id
+INNER JOIN pokemon p       ON pt.pokemon_id = p.id
 GROUP BY t.id, t.name
 ORDER BY avg_atk DESC;
 ```
@@ -405,7 +402,7 @@ Rows matched: 1  Changed: 1  Warnings: 0
 ```sql
 DELETE FROM pokemon_skill
 WHERE pokemon_id = (SELECT id FROM pokemon WHERE name = '라이츄')
-AND skill_id = (SELECT id FROM skill WHERE name = '전기쇼크');
+AND   skill_id   = (SELECT id FROM skill   WHERE name = '전기쇼크');
 ```
 
 ```text
